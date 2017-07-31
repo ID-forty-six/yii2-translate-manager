@@ -38,27 +38,19 @@ class ImportAction extends \yii\base\Action {
 
             if ($model->validate()){
 
-                try {
                     $result = $model->import();
+                    $flash_type = $result[0];
+                    $message = $result[1];
 
-                    $message = Yii::t('language', 'Successfully imported {fileName}', ['fileName'=>$model->importFile->name]);
-                    $message .= "<br/>\n";
-                    foreach ($result as $type => $typeResult) {
-                        $message .= "<br/>\n" . Yii::t('language', '{type}: {new} new, {updated} updated', [
-                                'type' => $type,
-                                'new' => $typeResult['new'],
-                                'updated' => $typeResult['updated']]);
+                    Yii::$app->getSession()->setFlash($flash_type, $message);
+
+                    if (isset($result[2]) && count($result[2]) > 0) {
+
+                      Yii::$app->getSession()->setFlash("warning", "Galimai blogų vertimų ID: ".implode(", ", $result[2]));
+
                     }
 
-                    Yii::$app->getSession()->setFlash('success', $message);
 
-                }catch (\Exception $e){
-                    if (YII_DEBUG){
-                        throw $e;
-                    }else {
-                        Yii::$app->getSession()->setFlash('danger', str_replace("\n", "<br/>\n", $e->getMessage()));
-                    }
-                }
             }
         }
 

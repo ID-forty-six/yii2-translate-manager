@@ -8,6 +8,7 @@ use yii\web\Response;
 use yii\web\XmlResponseFormatter;
 use lajax\translatemanager\Module;
 use lajax\translatemanager\models\ExportForm;
+use lajax\translatemanager\models\Language;
 use lajax\translatemanager\bundles\LanguageAsset;
 use lajax\translatemanager\bundles\LanguagePluginAsset;
 
@@ -37,34 +38,22 @@ class ExportAction extends \yii\base\Action {
         $module = Module::getInstance();
 
         $model = new ExportForm([
-            'format' => $module->defaultExportFormat,
+            //'format' => $module->defaultExportFormat,
         ]);
 
         if ($model->load(Yii::$app->request->post())) {
 
-            $fileName = Yii::t('language', 'translations').'.'.$model->format;
+            $fileName = $model->fromLanguage."_".$model->exportLanguages.".csv";
 
-            Yii::$app->response->format = $model->format;
+             Yii::$app->response->setDownloadHeaders($fileName);
 
-            Yii::$app->response->formatters = [
-                Response::FORMAT_XML => [
-                    'class' => XmlResponseFormatter::className(),
-                    'rootTag' => 'translations',
-                ],
-                Response::FORMAT_JSON => [
-                    'class' => JsonResponseFormatter::className(),
-                ]
-            ];
-
-            Yii::$app->response->setDownloadHeaders($fileName);
-
-            return $model->getExportData();
+            return Language::generatecsv($model->fromLanguage, $model->exportLanguages, $model->type);
 
         }else {
 
-            if (empty($model->languages)){
-                $model->exportLanguages = $model->getDefaultExportLanguages($module->defaultExportStatus);
-            }
+            // if (empty($model->languages)){
+            //     $model->exportLanguages = $model->getDefaultExportLanguages($module->defaultExportStatus);
+            // }
 
             return $this->controller->render('export', [
                 'model' => $model,

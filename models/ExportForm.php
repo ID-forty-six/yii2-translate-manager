@@ -14,12 +14,17 @@ class ExportForm extends Model
     /**
      * @var string[] The languages to export
      */
+
+    public $fromLanguage;
+
     public $exportLanguages;
+
+
 
     /**
      * @var string The file format in which to export the data (json or xml)
      */
-    public $format;
+    public $type;
 
     /**
      * @inheritdoc
@@ -27,7 +32,7 @@ class ExportForm extends Model
     public function rules()
     {
         return [
-            [['exportLanguages', 'format'], 'required'],
+            [['fromLanguage', 'exportLanguages', 'type'], 'required'],
         ];
     }
 
@@ -47,7 +52,7 @@ class ExportForm extends Model
 
     /**
      * @return Array[] Generate a two dimensional array of the translation data for the exportLanguages:
-     * 
+     *
      * ~~~
      * [
      *  'languages' => [],
@@ -55,7 +60,7 @@ class ExportForm extends Model
      *  'languageTranslations' => [],
      * ]
      * ~~~
-     * 
+     *
      */
     public function getExportData()
     {

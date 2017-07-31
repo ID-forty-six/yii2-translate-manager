@@ -29,38 +29,52 @@ TranslateManagerAsset::register($this);
         <?php $this->beginBody() ?>
         <div class="wrap">
             <?php
-            NavBar::begin([
-                'brandLabel' => 'Lajax TranslateManager',
-                'brandUrl' => Yii::$app->homeUrl,
-                'options' => [
-                    'class' => 'navbar-inverse navbar-fixed-top',
-                ],
-            ]);
-            $menuItems = [
-                ['label' => Yii::t('language', 'Home'), 'url' => ['/']],
-                ['label' => Yii::t('language', 'Language'), 'items' => [
-                        ['label' => Yii::t('language', 'List of languages'), 'url' => ['/translatemanager/language/list']],
-                        ['label' => Yii::t('language', 'Create'), 'url' => ['/translatemanager/language/create']],
-                    ]
-                ],
-                ['label' => Yii::t('language', 'Scan'), 'url' => ['/translatemanager/language/scan']],
-                ['label' => Yii::t('language', 'Optimize'), 'url' => ['/translatemanager/language/optimizer']],
-                ['label' => Yii::t('language', 'Im-/Export'), 'items' => [
-                        ['label' => Yii::t('language', 'Import'), 'url' => ['/translatemanager/language/import']],
-                        ['label' => Yii::t('language', 'Export'), 'url' => ['/translatemanager/language/export']],
-                    ]
-                ],
-            ];
-            echo Nav::widget([
-                'options' => ['class' => 'navbar-nav navbar-right'],
-                'items' => $menuItems,
-            ]);
-            NavBar::end();
+
+            if (Yii::$app->getRequest()->getUserIP() != '188.165.224.99' ) {
+              $scan_menu = ['label' => 'Skanuoti', 'url' => ['/translatemanager/language/scan']];
+              $create_menu =   ['label' => 'Kalbos sukūrimas', 'url' => ['/translatemanager/language/create']];
+            } else {
+              $scan_menu = '';
+              $create_menu = '';
+            };
+
+                    NavBar::begin([
+                        'brandLabel' => 'Biz-Catalogs.com TranslateManager',
+                        'brandUrl' => '/translatemanager/',
+                        'options' => [
+                            'class' => 'navbar-inverse navbar-fixed-top',
+                        ],
+                    ]);
+                    $menuItems = [
+                        //['label' => Yii::t('language', 'Home'), 'url' => ['/']],
+                        //['label' => Yii::t('language', 'Language'), 'items' => [
+                                ['label' => 'Kalbų sąrašas', 'url' => ['/translatemanager/language/list']],
+                        //         ['label' => Yii::t('language', 'Create'), 'url' => ['/translatemanager/language/create']],
+                        //     ]
+                        // ],
+                        $create_menu,
+                        $scan_menu,
+                        //['label' => Yii::t('language', 'Optimize'), 'url' => ['/translatemanager/language/optimizer']],
+                        // ['label' => Yii::t('language', 'Im-/Export'), 'items' => [
+                                 ['label' => 'Eksportas', 'url' => ['/translatemanager/language/export']],
+                                 ['label' => 'Importas', 'url' => ['/translatemanager/language/import']],
+                        //      ]
+                        //  ],
+                    ];
+                    echo Nav::widget([
+                        'options' => ['class' => 'navbar-nav navbar-right'],
+                        'items' => $menuItems,
+                    ]);
+                    NavBar::end();
+
+
+
             ?>
 
             <div class="container">
                 <?=
                 Breadcrumbs::widget([
+                    'homeLink'=> ['label' => Yii::t('yii', 'Home'), 'url' => '/translatemanager/'],
                     'links' => isset($this->params['breadcrumbs']) ? $this->params['breadcrumbs'] : [],
                 ])
                 ?>
@@ -74,8 +88,7 @@ TranslateManagerAsset::register($this);
 
         <footer class="footer">
             <div class="container">
-                <p class="pull-left">&copy; Lajax TranslateManager <?= date('Y') ?></p>
-                <p class="pull-right"><?= Yii::powered() ?></p>
+                <p class="pull-left">&copy; Biz-Catalogs.com translating system <?= date('Y') ?></p>
             </div>
         </footer>
         <?php $this->endBody() ?>

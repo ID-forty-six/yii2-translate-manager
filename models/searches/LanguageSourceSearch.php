@@ -65,7 +65,7 @@ class LanguageSourceSearch extends LanguageSource
         $translateLanguage = Yii::$app->request->get('language_id', Yii::$app->sourceLanguage);
         $sourceLanguage = $this->_getSourceLanguage();
 
-        $query = LanguageSource::find();
+        $query = LanguageSource::find()->where(['disabled' => 0]);
         $dataProvider = new ActiveDataProvider([
             'query' => $query,
         ]);

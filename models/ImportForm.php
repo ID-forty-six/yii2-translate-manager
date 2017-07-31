@@ -36,13 +36,10 @@ class ImportForm extends Model
                 ['importFile'],
                 'file',
                 'skipOnEmpty' => false,
-                'mimeTypes' => [
-                    'text/xml',
-                    'application/xml',
-                    'application/json',
-                    'text/plain', //json is sometimes incorrectly marked as text/plain
-                ],
+                'extensions' => ['csv'],
+                //'mimeTypes' => ['text/plain'],
                 'enableClientValidation' => false,
+                'checkExtensionByMimeType' => false
             ],
         ];
     }
@@ -56,180 +53,149 @@ class ImportForm extends Model
      */
     public function import()
     {
-        $result = [
-            'languages' => ['new' => 0, 'updated' => 0],
-            'languageSources' => ['new'=> 0, 'updated' => 0],
-            'languageTranslations' => ['new' => 0, 'updated' => 0],
-        ];
 
-        $data = $this->parseImportFile();
+        $importFileContent = file($this->importFile->tempName, FILE_IGNORE_NEW_LINES);
 
-        /** @var Language[] $languages */
-        $languages = Language::find()->indexBy('language_id')->all();
+        // ++ failo ikelimas i masyva (jei nepavyksta - grazinamaklaida); jei pavyksta tuomet i masyvairasomi tik irasai kurie turi vertimus t.y. nera tusti.
 
-        foreach ($data['languages'] as $importedLanguage) {
-            if (isset($languages[$importedLanguage['language_id']])){
-                $language = $languages[$importedLanguage['language_id']];
-            }else{
-                $language = new Language();
-            }
+        $data_array = array();
 
-            //cast integers
-            $importedLanguage['status'] = (int)$importedLanguage['status'];
+        foreach ($importFileContent as $key=>$line) {
+            $line_components = explode(";", $line);
+            if (count($line_components) == 3) {
 
-            $language->attributes = $importedLanguage;
-            if (count($language->getDirtyAttributes())) {
-                $saveType = $language->isNewRecord ? 'new' : 'updated';
-                if ($language->save()){
-                    $result['languages'][$saveType]++;
-                }else{
-                    $this->throwInvalidModelException($language);
+                $line_components[2] = str_replace("\n", "", trim($line_components[2]));
+
+                if ($line_components[2] != '') {
+                  $data_array[$key] = $line_components;
                 }
+
+            } else {
+
+              return ['danger', 'Blogas failo formatas!'];
+
             }
         }
 
-        /** @var LanguageSource[] $languageSources */
-        $languageSources = LanguageSource::find()->indexBy('id')->all();
+        // ++ pirmos eilutes validacija  (ar kalba i kuriaisversti irasai egzistuoja);
 
-        /** @var LanguageTranslate[] $languageTranslations */
-        $languageTranslations = LanguageTranslate::find()->all();
+          // ++ passelectinamos visos kalbos ir padaromas masyvas per array mapa
+          $languages = ArrayHelper::map(Language::find()->all(), 'language_id', 'name');
 
-        /*
-         *  Create 2 dimensional array for current and imported translation, first index by LanguageSource->id
-         *  and than indexed by LanguageTranslate->language.
-         *  E.g.: [
-         *      id => [
-         *          language => LanguageTranslate (for $languageTranslations) / Array (for $importedLanguageTranslations)
-         *          ...
-         *      ]
-         *      ...
-         * ]
-         */
-        $languageTranslations = ArrayHelper::map($languageTranslations, 'language', function($languageTranslation){
-            return $languageTranslation;
-        }, 'id');
-        $importedLanguageTranslations = ArrayHelper::map($data['languageTranslations'], 'language', function($languageTranslation){
-            return $languageTranslation;
-        }, 'id');
+          // ++ tikrinama ar source ir translate kalbos yra kalbu masyve jei ne tai grasinama klaida.
 
-        foreach ($data['languageSources'] as $importedLanguageSource) {
+          if ( !isset($languages[$data_array[0][1]]) || !isset($languages[$data_array[0][2]]) ) {
+              return ['danger', 'Vertimų faile blogai nustatytos kalbos!'];
+          }
 
-            $languageSource = null;
+          // ++ nustatoma klaba i kuria importuosime duomenis
+          $to_l = $data_array[0][2];
+          unset($data_array[0]);
 
-            //check if id exist and if category and messages are matching
-            if (isset($languageSources[$importedLanguageSource['id']]) &&
-                ($languageSources[$importedLanguageSource['id']]->category == $importedLanguageSource['category']) &&
-                ($languageSources[$importedLanguageSource['id']]->message == $importedLanguageSource['message']))
-            {
-                $languageSource = $languageSources[$importedLanguageSource['id']];
-            }
+        // ++ viso masyvo validacija (lyginant EN-US kalba ir LAnguage to irasus). Jei randama klaidu grazinama klaida ir per kableli ID numeriai, kuriuose yra klaidu.
 
-            if (is_null($languageSource)){
-                //no match by id, search by message
-                foreach ($languageSources as $languageSourceSearch) {
-                    if (($languageSourceSearch->category == $importedLanguageSource['category']) &&
-                        ($languageSourceSearch->message == $importedLanguageSource['message']))
-                    {
-                        $languageSource = $languageSourceSearch;
-                        break;
-                    }
+          // ++ paselectinami visi en-US vertimai, kurie nera tusti ir kuriu id yra source lenteleje.
+
+            // ++ paselectina visus vertimus kurie turi buti isversti.
+            $all_tr_ids = ArrayHelper::map(LanguageSource::find()->where(['disabled' => 0])->all(), 'id', 'message');
+
+            // ++ paselctiname from language reiksmes.
+            $from_l_ids = ArrayHelper::map(LanguageTranslate::find()->where(['language' => 'en-US'])->andwhere('id IN ('.implode(", ", array_keys($all_tr_ids)).')')->all(), 'id', 'translation');
+
+
+          // ++ prasukami vertimu aray ir suvaliduojama su en-US kalbos masyvu.
+
+          $errors = array();
+          $warnings = array();
+
+          if(count($data_array) > 0) {
+
+            foreach ($data_array as $values) {
+
+              if (isset($from_l_ids[$values[0]])) {
+
+
+                $from  = str_ireplace(["\n", ";"], ["[newline]", "."], $from_l_ids[$values[0]]);
+
+                if (Language::validateTranslation_critical($from, $values[2]) == false) {
+
+                  $errors['badline'][$values[0]] = $values[0];
+
                 }
-            }
 
-            if (is_null($languageSource)) {
-                //still no match, create new
-                $languageSource = new LanguageSource([
-                    'category' => $importedLanguageSource['category'],
-                    'message' => $importedLanguageSource['message'],
-                ]);
+                if (Language::validateTranslation_warning($from, $values[2]) == false && !isset($errors['badline'][$values[0]]) ) {
 
-                if ($languageSource->save()){
-                    $result['languageSources']['new']++;
-                }else{
-                    $this->throwInvalidModelException($languageSource);
+                  $warnings[$values[0]] = $values[0];
+
                 }
+
+              } else {
+
+                $errors['nonexist'][$values[0]] = $values[0];
+
+              }
+
             }
 
-            //do we have translations for the current source?
-            if (isset($importedLanguageTranslations[$importedLanguageSource['id']])){
-                //loop through the translations for the current source
-                foreach ($importedLanguageTranslations[$importedLanguageSource['id']] as $importedLanguageTranslation) {
-                    $languageTranslate = null;
+          }
 
-                    //is there already a translation for this souce
-                    if (isset($languageTranslations[$languageSource->id]) &&
-                        isset($languageTranslations[$languageSource->id][$importedLanguageTranslation['language']]))
-                    {
-                        $languageTranslate = $languageTranslations[$languageSource->id][$importedLanguageTranslation['language']];
-                    }
 
-                    //no translation found, create a new one
-                    if (is_null($languageTranslate)) {
-                        $languageTranslate = new LanguageTranslate();
-                    }
+          // ++ jei yra neatitikimu tai grazinama klaida su neatitikimu ID numeriais, kad butu sutikrintos eilutes.
+          if (count($errors) > 0) {
 
-                    $languageTranslate->attributes = $importedLanguageTranslation;
+            $msg  = array();
 
-                    //overwrite the id because the $languageSource->id might be different from the $importedLanguageTranslation['id']
-                    $languageTranslate->id = $languageSource->id;
+            if (isset($errors['badline'])) {
+              $msg[] = "Blogų vertimų ID: ".implode(", ", $errors['badline']);
 
-                    if (count($languageTranslate->getDirtyAttributes())) {
-                        $saveType = $languageTranslate->isNewRecord ? 'new' : 'updated';
-                        if ($languageTranslate->save()){
-                            $result['languageTranslations'][$saveType]++;
-                        }else{
-                            $this->throwInvalidModelException($languageTranslate);
-                        }
-                    }
-                }
             }
+
+            if (isset($errors['nonexist'])) {
+              $msg[] = "Neegzistuojančių vertimų ID: ".implode(", ", $errors['nonexist']);
+
+            }
+
+            return ['danger', implode("<br>", $msg), $warnings];
+
+          }
+
+        // ++ duomenu importavimas t.y jei randama irasu tada importas vyksta. Po importo grazinamas sekmes pranesimas su kalba ik uria importavome ir kiekis importuotu vertimu.
+
+        if(count($data_array) > 0) {
+
+            foreach ($data_array as $values) {
+
+              // ++ repleisinami [newline]
+              $id = $values[0];
+              $translation = str_ireplace("[newline]", "\n", $values[2]);
+
+              $model = LanguageTranslate::find()->where(['id' => $id, 'language' => $to_l])->one();
+
+              // ++ modelio issaugojimui paruosimas
+              if(!$model) {
+                $model = new LanguageTranslate();
+                $model->id = $id;
+                $model->language = $to_l;
+                $model->isNewRecord = true;
+              }
+
+              $model->translation = $translation;
+
+              $model->save(true);
+
+
+            }
+
+            return ['success', "Sėkmingai importuotų įrašų kiekis: ".count($data_array), $warnings];
+
+        } else {
+
+          return ['danger', "Vertimų faile nėra nė vieno vertimo!"];
+
         }
 
-        return $result;
+
     }
 
-    /**
-     * Parse the uploaded file (xml or json) and return it as an array
-     * @return Array[]
-     * @throws BadRequestHttpException
-     */
-    protected function parseImportFile()
-    {
-        $importFileContent = file_get_contents($this->importFile->tempName);
 
-        if ($this->importFile->extension == Response::FORMAT_JSON) {
-
-            $data = Json::decode($importFileContent);
-
-        }else if($this->importFile->extension == Response::FORMAT_XML) {
-
-            $xml = simplexml_load_string($importFileContent);
-            $json = json_encode($xml);
-            $data = json_decode($json, true);
-
-            //rebuild data due to simplexml merging duplicate elements
-            foreach ($data as $key => $value) {
-                $data[$key] = current($value);
-            }
-
-        }else{//should be caught by the form validation, but just in case
-            throw new BadRequestHttpException('Only json and xml files are supported.');
-        }
-
-        return $data;
-    }
-
-    /**
-     * Converts the model validation errors to a readable format an throws it as an exception
-     * @param ActiveRecord $model
-     * @throws Exception
-     */
-    protected function throwInvalidModelException($model)
-    {
-        $errorMessage = Yii::t('language', 'Invalid model "{model}":', ['model'=>$model->className()]);
-        foreach ($model->getErrors() as $attribute => $errors) {
-            $errorMessage .= "\n $attribute: " .  join(', ', $errors);
-        }
-        throw new Exception($errorMessage);
-    }
 }

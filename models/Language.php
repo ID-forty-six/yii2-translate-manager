@@ -8,6 +8,7 @@
 namespace lajax\translatemanager\models;
 
 use Yii;
+use yii\helpers\ArrayHelper;
 
 /**
  * This is the model class for table "language".
@@ -141,14 +142,28 @@ class Language extends \yii\db\ActiveRecord {
      */
     public function getGridStatistic() {
         static $statistics;
+
         if (!$statistics) {
-            $count = LanguageSource::find()->count();
+
+            $count = LanguageSource::find()->where(['disabled' => 0])->count();
+
             if ($count == 0) {
                 return 0;
             }
 
+            // ++ paimam visus source ID
+            $id_array = array();
+            $id_array_temp = LanguageSource::find()->select(['id'])->where(['disabled' => 0])->all();
+
+            foreach ($id_array_temp as $temp) {
+                $id_array[$temp->id] = $temp->id;
+            }
+
+
             $languageTranslates = LanguageTranslate::find()
                     ->select(['language', 'COUNT(*) AS cnt'])
+                    ->where("trim(translation) != ''")
+                    ->andwhere('id IN ('.implode(",", $id_array).')')
                     ->groupBy(['language'])
                     ->all();
 
@@ -182,6 +197,118 @@ class Language extends \yii\db\ActiveRecord {
     public function getLanguageSources() {
         return $this->hasMany(LanguageSource::className(), ['id' => 'id'])
                         ->viaTable(LanguageTranslate::tableName(), ['language' => 'language_id']);
+    }
+
+
+    public function generatecsv($from_l, $to_l, $type)
+    {
+
+      $result = '';
+
+      // ++ paselectina visus vertimus kurie turi buti isversti.
+      $all_tr_ids = ArrayHelper::map(LanguageSource::find()->where(['disabled' => 0])->all(), 'id', 'message');
+
+      // ++ paselctiname from language reiksmes.
+      $from_l_ids = ArrayHelper::map(LanguageTranslate::find()->where(['language' => $from_l])->andwhere('id IN ('.implode(", ", array_keys($all_tr_ids)).')')->all(), 'id', 'translation');
+
+      // ++ paseletiname to langage rieksmes.
+      $to_l_ids = ArrayHelper::map(LanguageTranslate::find()->where(['language' => $to_l])->andwhere("trim(translation) != ''")->andwhere('id IN ('.implode(", ", array_keys($all_tr_ids)).')')->all(), 'id', 'translation');
+
+
+      // ++ isvedama pirma eilute
+      $result = "id;".$from_l.";".$to_l."\n";
+
+      // ++ foreachiname masyva i CSV faila.
+      foreach ($from_l_ids as $key => $value) {
+
+        $value_r = str_ireplace(["\n", ";"], ["[newline]", "."], $value);
+
+        if ($type == 0) {
+
+            if (!isset($to_l_ids[$key])) {
+              $result .= $key.";".$value_r.";\n";
+            }
+
+
+        } else {
+
+            if(isset($to_l_ids[$key])) {
+
+              $val = str_ireplace(["\n", ";"], ["[newline]", "."], $to_l_ids[$key]);
+
+              $result .= $key.";".$value_r.";".$val."\n";
+
+            } else {
+
+              $result .= $key.";".$value_r.";\n";
+
+            }
+
+        }
+
+      }
+
+      return $result;
+
+    }
+
+
+    public function validateTranslation_critical($original_string, $validating_string)
+    {
+
+      $result = false;
+
+      $symbols = "\{\}\[\]\<\>";
+
+      if (Language::get_special_symbols($original_string, $symbols) == Language::get_special_symbols($validating_string, $symbols)) {
+        $result = true;
+      }
+
+      return $result;
+
+    }
+
+
+    public function validateTranslation_warning($original_string, $validating_string)
+    {
+
+      $result = false;
+
+      $symbols = "\.\!\?\{\}\[\]\<\>\/";
+
+      if (Language::get_special_symbols($original_string, $symbols) == Language::get_special_symbols($validating_string, $symbols) && Language::detect_capitalisation($original_string) == Language::detect_capitalisation($validating_string)) {
+        $result = true;
+      }
+
+      return $result;
+
+    }
+
+
+    public function get_special_symbols($string, $symbols)
+    {
+
+      // ++ istraukimas specialiu simboliu i stringa
+      $string = preg_replace("/[^".$symbols."]/", "", $string);
+
+      return $string;
+
+    }
+
+
+    public function detect_capitalisation($string)
+    {
+
+      $result = "";
+
+      if (ucfirst($string) == $string) {
+        $result = "upper";
+      } else {
+        $result = "lower";
+      }
+
+      return $result;
+
     }
 
 }
