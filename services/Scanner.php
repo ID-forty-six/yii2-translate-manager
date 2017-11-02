@@ -138,7 +138,7 @@ class Scanner {
      * @param string $message
      */
     public function addLanguageItem($category, $message) {
-		if ($category == 'kgrid')
+		if ($category == 'kvgrid')
 		{
 			return;
 		}
