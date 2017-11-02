@@ -138,6 +138,10 @@ class Scanner {
      * @param string $message
      */
     public function addLanguageItem($category, $message) {
+		if ($category == 'kgrid')
+		{
+			return;
+		}
         $this->_languageElements[$category][$message] = true;
 
         $coloredCategory = Console::ansiFormat($category, [Console::FG_YELLOW]);
