@@ -1,5 +1,5 @@
 {
-    "name": "lajax/yii2-translate-manager",
+    "name": "id-forty-six/yii2-translate-manager",
     "description": "Online Translate",
     "type": "yii2-extension",
     "keywords": ["yii2", "extension", "translate", "language", "module"],
@@ -10,8 +10,8 @@
 	},
     "authors": [
         {
-            "name": "Lajos Molnar",
-            "email": "lajax.m@gmail.com"
+            "name": "ID Forty Six",
+            "homepage": "https://sendinn.com"
         }
     ],
     "require": {
@@ -21,7 +21,7 @@
     },
     "autoload": {
         "psr-4": {
-            "lajax\\translatemanager\\": ""
+            "idfortysix\\translatemanager\\": ""
         }
     }
 }
